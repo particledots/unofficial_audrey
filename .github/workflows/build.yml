@@ -1,0 +1,75 @@
+name: Build plugin (macOS)
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:      # adds a "Run workflow" button in the Actions tab
+
+jobs:
+  build-macos:
+    runs-on: macos-26     # Apple silicon runner; macos-14 is retired by GitHub on 2 Nov 2026
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCOPY_PLUGIN_AFTER_BUILD=OFF -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+
+      - name: Build engine test, then run it
+        run: |
+          # Failures are also written as annotations (shown on the run page and readable through the API).
+          cmake --build build --target engine_test -j4 > build_log.txt 2>&1 || {
+            grep -E "error|Error" build_log.txt | head -8 | while IFS= read -r line; do echo "::error::BUILD: $line"; done
+            tail -5 build_log.txt; exit 1; }
+          ./build/engine_test > test_log.txt 2>&1; code=$?
+          cat test_log.txt
+          grep -E "FAIL" test_log.txt | head -8 | while IFS= read -r line; do echo "::error::TEST: $line"; done
+          exit $code
+
+      - name: Build AU + VST3
+        run: |
+          cmake --build build --target UnofficialAudrey_AU UnofficialAudrey_VST3 -j4 > plugin_log.txt 2>&1 || {
+            grep -E "error|Error" plugin_log.txt | head -8 | while IFS= read -r line; do echo "::error::PLUGIN: $line"; done
+            tail -20 plugin_log.txt; exit 1; }
+          tail -3 plugin_log.txt
+
+      - name: Ad-hoc sign (lets Apple silicon load an unsigned build)
+        run: |
+          for b in build/UnofficialAudrey_artefacts/Release/AU/*.component build/UnofficialAudrey_artefacts/Release/VST3/*.vst3; do
+            codesign --force --deep -s - "$b"
+          done
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp -R build/UnofficialAudrey_artefacts/Release/AU/*.component dist/
+          cp -R build/UnofficialAudrey_artefacts/Release/VST3/*.vst3 dist/
+          cp THIRD-PARTY-LICENSES.txt dist/
+          # Both slices must be present:
+          lipo -archs dist/*.component/Contents/MacOS/*
+          lipo -archs dist/*.vst3/Contents/MacOS/*
+          # Show the minimum macOS version baked into each slice (should say 11.0):
+          for a in arm64 x86_64; do echo "== $a"; lipo -thin $a dist/*.component/Contents/MacOS/* -output /tmp/slice_$a; otool -l /tmp/slice_$a | grep -A4 -E "LC_BUILD_VERSION|LC_VERSION_MIN" | grep -E "minos|version"; done
+          cat > dist/INSTALL.txt <<'TXT'
+          Unofficial Audrey - install
+          EASY (Logic, Audio Unit): double-click Install-Unofficial-Plugin.command in this folder.
+          It asks for your Mac password once. If macOS blocks it, right-click it > Open.
+
+          MANUAL:
+          1. Unzip.
+          2. Open Terminal and run:   xattr -dr com.apple.quarantine ~/Downloads/UnofficialAudrey-macOS/*
+             (adjust the path if you unzipped elsewhere; this clears the "downloaded from internet" block)
+          3. Copy "Unofficial Audrey.component" to  ~/Library/Audio/Plug-Ins/Components/
+             Copy "Unofficial Audrey.vst3"       to  ~/Library/Audio/Plug-Ins/VST3/
+          4. In Logic: Settings > Plug-in Manager > rescan. Look for "particledots: Unofficial Audrey"
+             (use a MIDI-controlled effect slot so it receives MIDI).
+          TXT
+          cp tools/install/Install-Unofficial-Plugin.command dist/
+          chmod +x dist/Install-Unofficial-Plugin.command
+          [ -x dist/Install-Unofficial-Plugin.command ] || { echo "::error::PACKAGE missing Install-Unofficial-Plugin.command"; exit 1; }
+          ditto -c -k --keepParent dist UnofficialAudrey-macOS.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: UnofficialAudrey-macOS
+          path: UnofficialAudrey-macOS.zip
