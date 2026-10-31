@@ -23,6 +23,7 @@ jobs:
             tail -5 build_log.txt; exit 1; }
           ./build/engine_test > test_log.txt 2>&1; code=$?
           cat test_log.txt
+          echo "::notice::TEST $(tail -1 test_log.txt)"
           grep -E "FAIL" test_log.txt | head -8 | while IFS= read -r line; do echo "::error::TEST: $line"; done
           exit $code
 
@@ -46,10 +47,13 @@ jobs:
           cp -R build/UnofficialAudrey_artefacts/Release/VST3/*.vst3 dist/
           cp THIRD-PARTY-LICENSES.txt dist/
           # Both slices must be present:
-          lipo -archs dist/*.component/Contents/MacOS/*
-          lipo -archs dist/*.vst3/Contents/MacOS/*
+          for f in dist/*.component/Contents/MacOS/* dist/*.vst3/Contents/MacOS/*; do
+            archs="$(lipo -archs "$f")"
+            echo "::notice::ARCHS $(basename "$f"): $archs"
+            case "$archs" in *arm64*x86_64*|*x86_64*arm64*) ;; *) echo "::error::PACKAGE not universal: $f ($archs)"; exit 1;; esac
+          done
           # Show the minimum macOS version baked into each slice (should say 11.0):
-          for a in arm64 x86_64; do echo "== $a"; lipo -thin $a dist/*.component/Contents/MacOS/* -output /tmp/slice_$a; otool -l /tmp/slice_$a | grep -A4 -E "LC_BUILD_VERSION|LC_VERSION_MIN" | grep -E "minos|version"; done
+          for a in arm64 x86_64; do echo "== $a"; lipo -thin $a dist/*.component/Contents/MacOS/* -output /tmp/slice_$a; otool -l /tmp/slice_$a | grep -A4 -E "LC_BUILD_VERSION|LC_VERSION_MIN" | grep -E "minos|version"; echo "::notice::MINOS $a: $(otool -l /tmp/slice_$a | grep -E 'minos|^ +version' | head -1)"; done
           cat > dist/INSTALL.txt <<'TXT'
           Unofficial Audrey - install
           EASY (Logic, Audio Unit): double-click Install-Unofficial-Plugin.command in this folder.
