@@ -89,6 +89,26 @@ jobs:
           [ -x dist/Install-Unofficial-Plugin.command ] || { echo "::error::PACKAGE missing Install-Unofficial-Plugin.command"; exit 1; }
           ditto -c -k --keepParent dist UnofficialAudrey-macOS.zip
 
+      - name: auval (Apple Audio Unit validation) and CPU check
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          rm -rf ~/Library/Audio/Plug-Ins/Components/*Audrey*.component
+          cp -R dist/*.component ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
+          sleep 3
+          auval -a > auval_list.txt 2>&1 || true
+          grep -i "Ptdt\|Audr" auval_list.txt | while IFS= read -r line; do echo "::notice::AUVAL LISTED: $line"; done
+          auval -v aumf Audr Ptdt > auval_log.txt 2>&1 && code=0 || code=$?
+          echo "::notice::AUVAL exit $code: $(tail -1 auval_log.txt)"
+          grep -iE "FAIL|ERROR|WARNING|ILLEGAL" auval_log.txt | head -12 | while IFS= read -r line; do echo "::warning::AUVAL: $line"; done
+          grep -E "TESTING|PASSED|VALIDATION|Rendering" auval_log.txt | head -12 | while IFS= read -r line; do echo "::notice::AUVAL LOG: $line"; done
+          tail -25 auval_log.txt
+          # CPU: time a 4 s render of one instance (note 60 held, Body Tune on, noise burst at input)
+          cmake --build build --target tune_check -j4 > /dev/null 2>&1
+          s=$(date +%s.%N); ./build/tune_check 60 1 5 0 250 2 /tmp/cpu.raw; e=$(date +%s.%N)
+          echo "::notice::CPU render of 4 s audio took $(echo "$e - $s" | bc) s on the CI runner"
+          exit 0
+
       - uses: actions/upload-artifact@v4
         with:
           name: UnofficialAudrey-macOS

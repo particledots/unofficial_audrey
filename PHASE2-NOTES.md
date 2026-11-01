@@ -44,12 +44,12 @@ Parameters are saved with the standard JUCE value-tree XML plus a version tag (`
 * auval, long-run CPU, many instances.
 * Behaviour of CC-driven host parameter updates in Logic automation modes.
 
-## Body Tune (18th parameter, `body_tune`, default Off)
+## Body Tune (18th parameter, `body_tune`, default On)
 
 Why: the feedback loop locks onto a tooth of the Body comb (multiples of 1/Body), not onto the played note.
 With Body Tune On the Body value is snapped to the nearest whole number of the note's periods (k/f0, within the
 1-100 ms range), so a comb tooth sits on the note. No engine DSP changed; the snap happens in the control layer
-(`Controller::effectiveBody`). Ignored while LFO is On (the LFO drives the delay then). Off = identical to the hardware behaviour.
+(`Controller::effectiveBody`). Ignored while LFO is On (the LFO drives the delay then). Off = identical to the hardware behaviour. Default On since 31 Oct 2026 (tested by Bryn in Logic on both Macs: notes track better, nothing sounds off).
 
 Measured offline with `tools/tune_sweep.py` (real control layer, 25 notes 16-88, 4 s renders, autocorrelation of 1.5-3.5 s;
 Body 1/5/20 ms, gain -12..+6 dB, HPF 250/10 Hz, with and without a noise burst at the input):

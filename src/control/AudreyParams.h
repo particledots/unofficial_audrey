@@ -82,7 +82,7 @@ inline const ParamInfo *paramTable()
         { "echo_send",      "Echo Send",        "",       0.0f,   1.0f,   0.0f,   Curve::Square,   false, 30.0f },
         { "echo_time",      "Echo Time",        "s",      0.05f,  5.0f,   0.5f,   Curve::Square,   false, 30.0f },
         { "echo_feedback",  "Echo Feedback",    "",       0.0f,   1.5f,   0.0f,   Curve::Linear,   false, 30.0f },
-        { "body_tune",      "Body Tune",        "",       0.0f,   1.0f,   0.0f,   Curve::Linear,   true,   0.0f },
+        { "body_tune",      "Body Tune",        "",       0.0f,   1.0f,   1.0f,   Curve::Linear,   true,   0.0f },
     };
     return t;
 }

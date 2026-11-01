@@ -232,9 +232,10 @@ static void test_body_tune() {
     auto f0 = [](float note) { return 440.0f * std::pow(2.0f, (note - 69.0f) / 12.0f); };
     auto settle = [&](Controller &c) { for (int i = 0; i < 48000; ++i) c.process(0.f, l, r); };
 
-    // off (default): the engine gets the Body setting untouched
-    Controller c; c.prepare(sr); c.setParam(kBody, 0.0105f); c.noteOn(60); settle(c);
-    CHECK(c.getParam(kBodyTune) == 0.f, "Body Tune must default to off");
+    // off: the engine gets the Body setting untouched (Body Tune defaults to on)
+    Controller c; c.prepare(sr);
+    CHECK(c.getParam(kBodyTune) == 1.f, "Body Tune must default to on");
+    c.setParam(kBodyTune, 0.f); c.setParam(kBody, 0.0105f); c.noteOn(60); settle(c);
     CHECK(std::fabs(c.getEffectiveBody() - 0.0105f) < 1e-6f, "Body changed with Body Tune off (%g)", c.getEffectiveBody());
 
     // on: a whole number of periods, nearest the setting (261.6 Hz: 10.5 ms is 2.75 periods -> 3 periods)
