@@ -80,6 +80,13 @@ static void test_param_table() {
     CHECK(paramInfo(kEchoFeedback).max == 1.5f, "echo feedback range");
     CHECK(kDefaultNote == 40.f && kMinNote == 16.f && kMaxNote == 88.f, "note range");
     CHECK(std::fabs(toReal(kLfoFrequency, 0.5f) - std::sqrt(0.01f * 7.f)) < 1e-4f, "LFO frequency is not logarithmic");
+    // firmware EXP mapping = min + n^2 * (max - min): body, output, input, echo send, echo time
+    CHECK(std::fabs(toReal(kBody, 0.5f) - (0.001f + 0.25f * 0.099f)) < 1e-6f, "body is not a square curve");
+    CHECK(std::fabs(toReal(kEchoTime, 0.5f) - (0.05f + 0.25f * 4.95f)) < 1e-5f, "echo time is not a square curve");
+    CHECK(std::fabs(toReal(kOutputVolume, 0.5f) - 0.25f) < 1e-6f && std::fabs(toReal(kInputVolume, 0.5f) - 1.25f) < 1e-5f, "output/input curves");
+    CHECK(std::fabs(toReal(kEchoSend, 0.5f) - 0.25f) < 1e-6f, "echo send curve");
+    // firmware LOG mapping (cutoffs): min * (max/min)^n
+    CHECK(std::fabs(toReal(kLpfCutoff, 0.5f) - std::sqrt(100.f * 18000.f)) < 0.5f, "LPF is not logarithmic");
 }
 
 static void test_smoothing_and_pitch() {
@@ -122,11 +129,80 @@ static void test_smoothing_and_pitch() {
     p.noteOff(64);   // an older note released: pitch must not change
     CHECK(p.getPitchNote() == held, "older note-off changed pitch (%g -> %g)", held, p.getPitchNote());
 
+    // pitch stays on the last note after release; an offset change then applies to that note
+    Controller h; h.prepare(sr); h.noteOn(60); h.noteOff(60);
+    CHECK(h.getPitchNote() == 60.f, "pitch moved on note-off (%g)", h.getPitchNote());
+    h.setParam(kPitchOffset, 5.f); for (int i = 0; i < 48000; ++i) h.process(0.f, l, r);
+    CHECK(std::fabs(h.getPitchNote() - 65.f) < 0.01f, "offset after release -> %g", h.getPitchNote());
+
     // sample-rate change keeps the parameter targets
     Controller q; q.prepare(48000.f); q.setParam(kFeedbackGain, -20.f); q.prepare(96000.f);
     CHECK(q.getParam(kFeedbackGain) == -20.f && q.getSmoothed(kFeedbackGain) == -20.f, "targets lost on re-prepare");
     CHECK(!q.prepare(1000.f) && !q.ready(), "bad rate should leave controller not ready");
     q.process(0.f, l, r); CHECK(l == 0.f && r == 0.f, "not-ready controller must be silent");
+}
+
+static void test_midi_cc() {
+    const float sr = 48000.f;
+    struct Row { int cc; int param; float at0, at127; };
+    const Row rows[] = {
+        {  7, kOutputVolume,  0.f,    1.f },
+        { 12, kReverbDecay,   0.2f,   1.f },
+        { 72, kEnvelopeShape, 0.f,    1.f },
+        { 74, kLpfCutoff,     100.f,  18000.f },
+        { 75, kFeedbackGain, -60.f,   12.f },
+        { 76, kBody,          0.001f, 0.1f },
+        { 77, kInputVolume,   0.f,    5.f },
+        { 81, kHpfCutoff,     10.f,   4000.f },
+        { 91, kReverbMix,     0.f,    1.f },
+    };
+    Controller c; c.prepare(sr);
+    for (const Row &row : rows) {
+        auto a = c.handleCC(row.cc, 0), b = c.handleCC(row.cc, 127);
+        CHECK(a.handled && a.paramId == row.param && b.paramId == row.param, "CC %d maps to wrong parameter (%d)", row.cc, a.paramId);
+        CHECK(std::fabs(a.real - row.at0) <= 1e-4f * (1 + std::fabs(row.at0)), "CC %d at 0 -> %g (want %g)", row.cc, a.real, row.at0);
+        CHECK(std::fabs(b.real - row.at127) <= 1e-4f * (1 + std::fabs(row.at127)), "CC %d at 127 -> %g (want %g)", row.cc, b.real, row.at127);
+        CHECK(c.getParam(row.param) == b.real, "CC %d did not move the parameter target", row.cc);
+    }
+    // curves through the CC: mid values follow each control's own curve (firmware: UpdateNormalized + fmap)
+    const float n = 64.f / 127.f;
+    CHECK(std::fabs(c.handleCC(7, 64).real - n * n) < 1e-5f, "CC7 curve");
+    CHECK(std::fabs(c.handleCC(77, 64).real - 5.f * n * n) < 1e-4f, "CC77 curve");
+    CHECK(std::fabs(c.handleCC(76, 64).real - (0.001f + n * n * 0.099f)) < 1e-6f, "CC76 curve");
+    CHECK(std::fabs(c.handleCC(12, 64).real - (0.2f + 0.8f * std::expm1(-3.f * n) / std::expm1(-3.f))) < 1e-5f, "CC12 anti-exp curve");
+    CHECK(std::fabs(c.handleCC(74, 64).real - 100.f * std::pow(180.f, n)) < 1.f, "CC74 log curve");
+
+    // unmapped CCs and out-of-range values
+    CHECK(!c.handleCC(1, 64).handled && !c.handleCC(120, 0).handled, "unmapped CC must not be handled");
+    CHECK(c.handleCC(75, 500).real == 12.f && c.handleCC(75, -5).real == -60.f, "CC value not clamped");
+
+    // CC 70: direct pitch, 16..88, no offset, until the next note-on or offset change
+    Controller p; p.prepare(sr); float l, r;
+    p.setParam(kPitchOffset, 7.f); for (int i = 0; i < 48000; ++i) p.process(0.f, l, r);
+    auto r70 = p.handleCC(70, 127);
+    CHECK(r70.handled && r70.paramId == -1, "CC70 result");
+    CHECK(p.getPitchNote() == kMaxNote, "CC70=127 -> %g", p.getPitchNote());
+    p.handleCC(70, 0); CHECK(p.getPitchNote() == kMinNote, "CC70=0 -> %g", p.getPitchNote());
+    p.handleCC(70, 64); CHECK(std::fabs(p.getPitchNote() - (16.f + 72.f * n)) < 1e-4f, "CC70=64 -> %g", p.getPitchNote());
+    for (int i = 0; i < 4800; ++i) p.process(0.f, l, r);
+    CHECK(std::fabs(p.getPitchNote() - (16.f + 72.f * n)) < 1e-4f, "CC70 pitch must survive the control tick (%g)", p.getPitchNote());
+    p.noteOn(50); CHECK(std::fabs(p.getPitchNote() - 57.f) < 0.01f, "note-on after CC70 -> %g", p.getPitchNote());
+    p.handleCC(70, 127); p.setParam(kPitchOffset, 12.f); for (int i = 0; i < 48000; ++i) p.process(0.f, l, r);
+    CHECK(std::fabs(p.getPitchNote() - 62.f) < 0.01f, "offset change after CC70 -> %g", p.getPitchNote());
+
+    // CC 123: all notes off (a later note-off for the old note is then a no-op)
+    p.noteOn(60); CHECK(p.getHeldNote() == 60, "held note");
+    auto r123 = p.handleCC(123, 0);
+    CHECK(r123.handled && r123.paramId == -1 && p.getHeldNote() == -1, "CC123 did not release the note");
+
+    // CC 7 = 0 silences the output; the engine really follows the CC
+    Controller q; q.prepare(sr); q.setParam(kFeedbackGain, 6.f); q.noteOn(48);
+    double loud = 0, quiet = 0;
+    for (int i = 0; i < 48000 * 3; ++i) { float a, b; q.process(0.f, a, b); if (i > 48000 * 2) loud = std::fmax(loud, std::fabs(a)); }
+    q.handleCC(7, 0);
+    for (int i = 0; i < 48000; ++i) { float a, b; q.process(0.f, a, b); if (i > 24000) quiet = std::fmax(quiet, std::fabs(a)); }
+    std::printf("CC7 check: loud %.4f -> quiet %.6f\n", loud, quiet);
+    CHECK(loud > 0.01 && quiet < 1e-4, "CC7=0 should mute (%.5f -> %.6f)", loud, quiet);
 }
 
 static unsigned rng_state = 12345u;
@@ -232,6 +308,7 @@ int main() {
 
     test_param_table();
     test_smoothing_and_pitch();
+    test_midi_cc();
     test_automation_stress();
     test_controller_determinism();
 

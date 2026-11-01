@@ -4,12 +4,14 @@
 #include "AudreyController.h"
 
 // Unofficial Audrey: the Audrey feedback-synth engine as a MIDI-controlled effect.
-// Phase 2: 17 host-automatable parameters (see control/AudreyParams.h), smoothed, plus state save/restore.
-class AudreyProcessor : public juce::AudioProcessor
+// Phase 2: 17 host-automatable parameters (see control/AudreyParams.h), smoothed, the Touch MIDI CC map,
+// and state save/restore. A CC moves the sound on the audio thread and the matching host parameter a few
+// milliseconds later on the message thread (the host is never called from the audio thread).
+class AudreyProcessor : public juce::AudioProcessor, private juce::Timer
 {
 public:
     AudreyProcessor();
-    ~AudreyProcessor() override = default;
+    ~AudreyProcessor() override { stopTimer(); }
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
@@ -41,10 +43,16 @@ private:
 
     void renderRange (juce::AudioBuffer<float>& buffer, int start, int end);
     void handleMidi (const juce::MidiMessage& m);
-    void syncParameters();
+    void syncParameters (bool force);
+    void timerCallback() override;
 
     audrey::Controller controller;
     std::atomic<float>* rawParam[audrey::kNumParams] = {};
+
+    // Host <-> CC bookkeeping (see syncParameters / timerCallback)
+    std::atomic<float> ccPending[audrey::kNumParams];   // real value waiting to be shown to the host (NaN = none)
+    std::atomic<float> ccEcho[audrey::kNumParams];      // value the timer just wrote to the host: not a host change
+    float lastSeen[audrey::kNumParams] = {};            // audio thread only
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudreyProcessor)
 };

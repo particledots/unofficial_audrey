@@ -37,6 +37,20 @@ public:
     void noteOff(int note);
     void allNotesOff();
 
+    // MIDI control change (Touch map: 7 output, 12 reverb decay, 70 frequency, 72 envelope shape,
+    // 74 LPF, 75 feedback gain, 76 body, 77 input, 81 HPF, 91 reverb mix, 123 all notes off).
+    // A CC moves the same parameter as the host control. Values 0..127 cover the parameter's full range
+    // through its own curve, as on the hardware. CC 70 sets the string pitch directly (16..88, no offset)
+    // until the next note-on or Frequency Offset change; it has no host parameter.
+    struct CCResult {
+        bool handled = false;   // CC is part of the map
+        int paramId = -1;       // parameter moved (-1 for CC 70 and CC 123)
+        float real = 0.0f;      // that parameter's new target, real units
+    };
+    CCResult handleCC(int cc, int value);
+
+    int getHeldNote() const { return heldNote_; }
+
     void process(float in, float &outL, float &outR);
 
 private:
@@ -48,9 +62,11 @@ private:
     bool ready_ = false;
     float sampleRate_ = 48000.0f;
     int counter_ = 0;
-    int heldNote_ = -1;
+    int heldNote_ = -1;                // note currently held (for note-off matching)
+    float baseNote_ = kDefaultNote;    // last note played; pitch stays on it after release, as on the hardware
     float pitchSent_ = -1000.0f;
     bool lfoWasOn_ = false;
+    float pitchOverride_ = -1.0f;      // >= 0: CC 70 pitch in use
 
     float target_[kNumParams] = {};
     float current_[kNumParams] = {};

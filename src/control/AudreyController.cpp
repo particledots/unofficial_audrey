@@ -20,6 +20,8 @@ bool Controller::prepare(float sampleRate)
         coef_[i] = p.smoothMs > 0.0f ? 1.0f - std::exp(-1.0f / (ticksPerSec * p.smoothMs * 0.001f)) : 1.0f;
     }
     heldNote_ = -1;
+    baseNote_ = kDefaultNote;
+    pitchOverride_ = -1.0f;
     pitchSent_ = -1000.0f;
     lfoWasOn_ = false;
     counter_ = 0;
@@ -33,8 +35,11 @@ void Controller::setParam(int id, float v)
 {
     if (id < 0 || id >= kNumParams || !std::isfinite(v)) return;
     const ParamInfo &p = paramInfo(id);
-    target_[id] = std::min(std::max(v, p.min), p.max);
-    if (p.toggle) target_[id] = target_[id] >= 0.5f ? 1.0f : 0.0f;
+    float t = std::min(std::max(v, p.min), p.max);
+    if (p.toggle) t = t >= 0.5f ? 1.0f : 0.0f;
+    // Moving Frequency Offset hands pitch back to note + offset (the hardware recomputes pitch the same way).
+    if (id == kPitchOffset && t != target_[id]) pitchOverride_ = -1.0f;
+    target_[id] = t;
 }
 
 void Controller::setParamNormalised(int id, float n)
@@ -47,6 +52,8 @@ void Controller::noteOn(int note)
 {
     if (!ready_) return;
     heldNote_ = note;
+    baseNote_ = (float) note;
+    pitchOverride_ = -1.0f;
     applyPitch();
     engine_->NoteOn();
 }
@@ -69,8 +76,10 @@ void Controller::allNotesOff()
 
 void Controller::applyPitch()
 {
-    const float base = heldNote_ >= 0 ? (float) heldNote_ : kDefaultNote;
-    const float note = std::min(std::max(base + current_[kPitchOffset], kMinNote), kMaxNote);
+    if (!engine_) return;
+    const float note = pitchOverride_ >= 0.0f
+                           ? pitchOverride_
+                           : std::min(std::max(baseNote_ + current_[kPitchOffset], kMinNote), kMaxNote);
     if (note != pitchSent_) {
         engine_->SetStringPitch(note);
         pitchSent_ = note;
@@ -103,6 +112,40 @@ void Controller::apply(int id, bool force)
         case kEchoFeedback:    e.SetEchoDelayFeedback(v); break;
         default: break;
     }
+}
+
+Controller::CCResult Controller::handleCC(int cc, int value)
+{
+    CCResult r;
+    const float n = clamp01((float) std::min(std::max(value, 0), 127) / 127.0f);
+    int id = -1;
+    switch (cc) {
+        case 7:  id = kOutputVolume;  break;
+        case 12: id = kReverbDecay;   break;
+        case 72: id = kEnvelopeShape; break;
+        case 74: id = kLpfCutoff;     break;
+        case 75: id = kFeedbackGain;  break;
+        case 76: id = kBody;          break;
+        case 77: id = kInputVolume;   break;
+        case 81: id = kHpfCutoff;     break;
+        case 91: id = kReverbMix;     break;
+        case 70:
+            pitchOverride_ = kMinNote + n * (kMaxNote - kMinNote);
+            applyPitch();
+            r.handled = true;
+            return r;
+        case 123:
+            allNotesOff();
+            r.handled = true;
+            return r;
+        default:
+            return r;
+    }
+    setParamNormalised(id, n);
+    r.handled = true;
+    r.paramId = id;
+    r.real = target_[id];
+    return r;
 }
 
 void Controller::tick()

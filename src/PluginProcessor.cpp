@@ -44,7 +44,13 @@ AudreyProcessor::AudreyProcessor()
       apvts (*this, nullptr, "AudreyState", createLayout())
 {
     for (int i = 0; i < kNumParams; ++i)
+    {
         rawParam[i] = apvts.getRawParameterValue (paramInfo (i).id);
+        ccPending[i].store (std::nanf (""));
+        ccEcho[i].store (std::nanf (""));
+        lastSeen[i] = rawParam[i]->load();
+    }
+    startTimerHz (30);
 }
 
 bool AudreyProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -56,15 +62,59 @@ bool AudreyProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
                            || in == juce::AudioChannelSet::mono();
 }
 
-void AudreyProcessor::syncParameters()
+// Pushes host parameter changes to the controller. Only a *change* of the host value is pushed, so a value
+// set by a MIDI CC stays until the host/UI moves that parameter. force = take every host value as it is.
+void AudreyProcessor::syncParameters (bool force)
 {
     for (int i = 0; i < kNumParams; ++i)
-        controller.setParam (i, rawParam[i]->load());
+    {
+        const float raw = rawParam[i]->load();
+
+        if (force)
+        {
+            lastSeen[i] = raw;
+            ccEcho[i].store (std::nanf (""));
+            controller.setParam (i, raw);
+            continue;
+        }
+
+        if (raw == lastSeen[i]) continue;
+        lastSeen[i] = raw;
+
+        // The timer writes CC values to the host; seeing one of those come back is not a host change.
+        const float echo = ccEcho[i].load();
+        if (std::isfinite (echo) && std::abs (raw - echo) <= 1.0e-4f * (std::abs (echo) + 1.0e-3f))
+        {
+            ccEcho[i].store (std::nanf (""));
+            continue;
+        }
+
+        ccPending[i].store (std::nanf (""));   // the host/UI moved it: an older CC value must not overwrite that
+        controller.setParam (i, raw);
+    }
+}
+
+// Message thread: show CC-driven parameter changes to the host (UI, automation recording).
+void AudreyProcessor::timerCallback()
+{
+    for (int i = 0; i < kNumParams; ++i)
+    {
+        const float v = ccPending[i].exchange (std::nanf (""));
+        if (! std::isfinite (v)) continue;
+
+        if (auto* param = apvts.getParameter (paramInfo (i).id))
+        {
+            ccEcho[i].store (v);
+            param->beginChangeGesture();
+            param->setValueNotifyingHost (param->convertTo0to1 (v));
+            param->endChangeGesture();
+        }
+    }
 }
 
 void AudreyProcessor::prepareToPlay (double sampleRate, int)
 {
-    syncParameters();   // start at the host's current values, not the defaults
+    syncParameters (true);   // start at the host's current values, not the defaults
     controller.prepare (static_cast<float> (sampleRate));
 }
 
@@ -76,8 +126,15 @@ void AudreyProcessor::handleMidi (const juce::MidiMessage& m)
         controller.noteOn (m.getNoteNumber());
     else if (m.isNoteOff())
         controller.noteOff (m.getNoteNumber());
-    else if (m.isAllNotesOff() || m.isAllSoundOff())
+    else if (m.isAllSoundOff())
         controller.allNotesOff();
+    else if (m.isController())
+    {
+        // Touch CC map (7, 12, 70, 72, 74, 75, 76, 77, 81, 91; 123 = all notes off)
+        const auto res = controller.handleCC (m.getControllerNumber(), m.getControllerValue());
+        if (res.paramId >= 0)
+            ccPending[res.paramId].store (res.real);
+    }
 }
 
 void AudreyProcessor::renderRange (juce::AudioBuffer<float>& buffer, int start, int end)
@@ -112,7 +169,7 @@ void AudreyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         return;
     }
 
-    syncParameters();
+    syncParameters (false);
 
     int pos = 0;
     for (const auto meta : midi)

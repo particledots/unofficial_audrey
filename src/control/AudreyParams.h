@@ -47,15 +47,22 @@ constexpr float kMinNote = 16.0f;
 constexpr float kMaxNote = 88.0f;
 constexpr float kDefaultNote = 40.0f;   // pitch used when no MIDI note is held (Phase 0 default)
 
-// Defaults: ranges are from Phase 0. Phase 0 gives only the frequency default (note 40); the other
-// defaults are the Phase 1 fixed settings, except Body, which is 1 ms (Phase 2 pitch check: at 10 ms
-// the loop locks onto the body comb and the note is not heard at its own pitch).
+// Curves: Square is DaisySP's Mapping::EXP (min + n*n*(max-min)); Log is Mapping::LOG; AntiExp3 is the
+// firmware's ftension(n, -3) for Reverb Decay. Body, Output, Input, Echo Send and Echo Time are EXP in the
+// AudreyTouch / Audrey-II firmware (verified in their registerParams). LFO Frequency is linear in the
+// firmware; here it is Log because 0.01-7 Hz is too cramped at the slow end on a linear control.
+//
+// Defaults: Frequency (note 40), Echo Time (0.5 s), Echo Feedback (0), LFO (1 Hz, 0.5), Envelope (0),
+// Output (0.5), HPF (250 Hz) are the firmware's registered defaults. The rest are playable plugin
+// defaults (the firmware overwrites them from the knobs at boot): Feedback Gain -6 dB, LPF 8 kHz,
+// Reverb 0.3 / decay 0.85, Input 0, as in Phase 1. Body is 1 ms (Phase 2 pitch check: at 10 ms the loop
+// locks onto the body comb and the note is not heard at its own pitch).
 inline const ParamInfo *paramTable()
 {
     static const ParamInfo t[kNumParams] = {
         { "pitch_offset",   "Frequency Offset", "st",   -36.0f,  36.0f,   0.0f,   Curve::Linear,   false, 20.0f },
         { "fb_gain",        "Feedback Gain",    "dB",   -60.0f,  12.0f,  -6.0f,   Curve::Linear,   false, 30.0f },
-        { "body",           "Body",             "s",      0.001f, 0.1f,   0.001f, Curve::Log,      false, 30.0f },
+        { "body",           "Body",             "s",      0.001f, 0.1f,   0.001f, Curve::Square,   false, 30.0f },
         { "fb_lpf",         "Feedback LPF",     "Hz",   100.0f, 18000.0f, 8000.0f, Curve::Log,     false, 30.0f },
         { "fb_hpf",         "Feedback HPF",     "Hz",    10.0f,  4000.0f,  250.0f, Curve::Log,     false, 30.0f },
         { "reverb_mix",     "Reverb Mix",       "",       0.0f,   1.0f,   0.3f,   Curve::Linear,   false, 30.0f },
@@ -68,8 +75,8 @@ inline const ParamInfo *paramTable()
         { "lfo_on",         "LFO On",           "",       0.0f,   1.0f,   0.0f,   Curve::Linear,   true,   0.0f },
         { "drone_on",       "Drone On",         "",       0.0f,   1.0f,   0.0f,   Curve::Linear,   true,   0.0f },
         { "echo_send",      "Echo Send",        "",       0.0f,   1.0f,   0.0f,   Curve::Square,   false, 30.0f },
-        { "echo_time",      "Echo Time",        "s",      0.05f,  5.0f,   0.4f,   Curve::Log,      false, 30.0f },
-        { "echo_feedback",  "Echo Feedback",    "",       0.0f,   1.5f,   0.5f,   Curve::Linear,   false, 30.0f },
+        { "echo_time",      "Echo Time",        "s",      0.05f,  5.0f,   0.5f,   Curve::Square,   false, 30.0f },
+        { "echo_feedback",  "Echo Feedback",    "",       0.0f,   1.5f,   0.0f,   Curve::Linear,   false, 30.0f },
     };
     return t;
 }
