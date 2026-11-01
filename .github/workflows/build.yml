@@ -27,6 +27,20 @@ jobs:
           grep -E "FAIL" test_log.txt | head -8 | while IFS= read -r line; do echo "::error::TEST: $line"; done
           exit $code
 
+      - name: Plugin state test (parameters, state save/restore, CC -> host)
+        run: |
+          cmake --build build --target AudreyStateTest -j4 > state_build_log.txt 2>&1 || {
+            grep -E "error|Error" state_build_log.txt | head -8 | while IFS= read -r line; do echo "::error::STATETEST BUILD: $line"; done
+            tail -20 state_build_log.txt; exit 1; }
+          bin="$(find build -name AudreyStateTest -type f -perm -u+x | head -1)"
+          echo "state test binary: $bin"
+          "$bin" > state_log.txt 2>&1; code=$?
+          cat state_log.txt
+          echo "::notice::STATETEST $(tail -1 state_log.txt)"
+          grep -E "FAIL" state_log.txt | head -8 | while IFS= read -r line; do echo "::error::STATETEST: $line"; done
+          grep -E "^(state|CC -> host|body default|audio after)" state_log.txt | while IFS= read -r line; do echo "::notice::STATETEST $line"; done
+          exit $code
+
       - name: Build AU + VST3
         run: |
           cmake --build build --target UnofficialAudrey_AU UnofficialAudrey_VST3 -j4 > plugin_log.txt 2>&1 || {

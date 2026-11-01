@@ -24,13 +24,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout AudreyProcessor::createLayou
             [i] (float, float, float value) { return toNormalised (i, value); },
             [i] (float, float, float value) { return juce::jlimit (paramInfo (i).min, paramInfo (i).max, value); });
 
+        // Units are part of the text ("1.00 ms", "8.00 kHz"), so no separate label; typed values are parsed back.
         auto attrs = juce::AudioParameterFloatAttributes()
-                         .withLabel (p.unit)
-                         .withStringFromValueFunction ([] (float v, int)
-                         {
-                             const float a = std::abs (v);
-                             return juce::String (v, a < 1.0f ? 3 : (a < 100.0f ? 2 : 1));
-                         });
+                         .withStringFromValueFunction ([i] (float v, int) { return juce::String (formatValue (i, v)); })
+                         .withValueFromStringFunction ([i] (const juce::String& t) { return parseValue (i, t.toStdString()); });
 
         layout.add (std::make_unique<juce::AudioParameterFloat> (pid, p.name, range, p.def, attrs));
     }
@@ -184,7 +181,9 @@ void AudreyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
 
 void AudreyProcessor::getStateInformation (juce::MemoryBlock& dest)
 {
-    if (auto xml = apvts.copyState().createXml())
+    auto state = apvts.copyState();
+    state.setProperty ("audreyStateVersion", 1, nullptr);   // for future migrations
+    if (auto xml = state.createXml())
         copyXmlToBinary (*xml, dest);
 }
 

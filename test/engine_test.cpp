@@ -89,6 +89,28 @@ static void test_param_table() {
     CHECK(std::fabs(toReal(kLpfCutoff, 0.5f) - std::sqrt(100.f * 18000.f)) < 0.5f, "LPF is not logarithmic");
 }
 
+static void test_text() {
+    CHECK(formatValue(kBody, 0.001f) == "1.00 ms", "body text: %s", formatValue(kBody, 0.001f).c_str());
+    CHECK(formatValue(kBody, 0.05f) == "50.0 ms", "body text: %s", formatValue(kBody, 0.05f).c_str());
+    CHECK(formatValue(kLpfCutoff, 8000.f) == "8.00 kHz" && formatValue(kHpfCutoff, 250.f) == "250 Hz" && formatValue(kHpfCutoff, 10.f) == "10.0 Hz", "cutoff text");
+    CHECK(formatValue(kFeedbackGain, -6.f) == "-6.0 dB" && formatValue(kEchoTime, 0.5f) == "0.50 s", "gain / echo text");
+    CHECK(formatValue(kLfoOn, 1.f) == "On" && formatValue(kDroneOn, 0.f) == "Off", "toggle text");
+    // what the host shows can be typed back in
+    for (int i = 0; i < kNumParams; ++i) {
+        const ParamInfo &p = paramInfo(i);
+        for (int k = 0; k <= 10; ++k) {
+            const float v = toReal(i, k / 10.f);
+            const float back = parseValue(i, formatValue(i, v));
+            const float tol = p.toggle ? 0.f : 0.006f * std::fabs(v) + 0.006f * (p.max - p.min) * 0.1f;
+            CHECK(std::fabs(back - v) <= tol + 1e-6f, "%s: '%s' parsed as %g, expected %g", p.id, formatValue(i, v).c_str(), back, v);
+        }
+    }
+    CHECK(std::fabs(parseValue(kBody, "5") - 0.005f) < 1e-7f, "bare body number is ms");
+    CHECK(std::fabs(parseValue(kBody, "20 ms") - 0.02f) < 1e-7f && std::fabs(parseValue(kBody, "0.02 s") - 0.02f) < 1e-7f, "body units");
+    CHECK(std::fabs(parseValue(kLpfCutoff, "2.5k") - 2500.f) < 1e-3f && std::fabs(parseValue(kLpfCutoff, "900") - 900.f) < 1e-3f, "cutoff units");
+    CHECK(std::fabs(parseValue(kEchoTime, "250 ms") - 0.25f) < 1e-7f && std::fabs(parseValue(kEchoTime, "2") - 2.f) < 1e-7f, "echo time units");
+}
+
 static void test_smoothing_and_pitch() {
     const float sr = 48000.f;
     Controller c;
@@ -307,6 +329,7 @@ int main() {
     }
 
     test_param_table();
+    test_text();
     test_smoothing_and_pitch();
     test_midi_cc();
     test_automation_stress();

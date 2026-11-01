@@ -51,6 +51,16 @@ if(AUDREY_BUILD_PLUGIN)
     list(APPEND FORMATS AU)
   endif()
 
+  # Plugin-level test (parameters, state save/restore, CC -> host parameter). Run by CI.
+  juce_add_console_app(AudreyStateTest PRODUCT_NAME "AudreyStateTest")
+  set_target_properties(AudreyStateTest PROPERTIES EXCLUDE_FROM_ALL TRUE)
+  target_sources(AudreyStateTest PRIVATE test/state_test.cpp src/PluginProcessor.cpp src/PluginEditor.cpp)
+  target_include_directories(AudreyStateTest PRIVATE src)
+  target_compile_definitions(AudreyStateTest PRIVATE
+    JucePlugin_Name="UnofficialAudrey" JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_MODAL_LOOPS_PERMITTED=1)
+  target_link_libraries(AudreyStateTest PRIVATE
+    audrey_core juce::juce_audio_utils juce::juce_recommended_config_flags)
+
   juce_add_plugin(UnofficialAudrey
     COMPANY_NAME "particledots"
     PLUGIN_MANUFACTURER_CODE Ptdt

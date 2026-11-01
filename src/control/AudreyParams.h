@@ -6,6 +6,10 @@
 #pragma once
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
+#include <cctype>
+#include <cstdlib>
+#include <string>
 
 namespace audrey {
 
@@ -124,6 +128,55 @@ inline float toNormalised(int id, float v)
         case Curve::AntiExp3: return antiExp3Inv((v - p.min) / span);
     }
     return 0.0f;
+}
+
+// ---- text shown by the host and the editor, and parsing of typed values -----------------------------
+// Examples: Body "1.0 ms", LPF "8.00 kHz" / "250 Hz", Echo Time "0.50 s", Feedback Gain "-6.0 dB".
+inline std::string formatValue(int id, float v)
+{
+    char b[48];
+    switch (id) {
+        case kPitchOffset:   std::snprintf(b, sizeof b, "%+.1f st", v); break;
+        case kFeedbackGain:  std::snprintf(b, sizeof b, "%.1f dB", v); break;
+        case kBody: {
+            const float ms = v * 1000.0f;
+            std::snprintf(b, sizeof b, ms < 10.0f ? "%.2f ms" : "%.1f ms", ms);
+            break;
+        }
+        case kLpfCutoff:
+        case kHpfCutoff:
+            if (v >= 1000.0f)     std::snprintf(b, sizeof b, "%.2f kHz", v / 1000.0f);
+            else if (v >= 100.0f) std::snprintf(b, sizeof b, "%.0f Hz", v);
+            else                  std::snprintf(b, sizeof b, "%.1f Hz", v);
+            break;
+        case kLfoFrequency:  std::snprintf(b, sizeof b, "%.2f Hz", v); break;
+        case kEchoTime:      std::snprintf(b, sizeof b, "%.2f s", v); break;
+        case kLfoOn:
+        case kDroneOn:       std::snprintf(b, sizeof b, "%s", v >= 0.5f ? "On" : "Off"); break;
+        default:             std::snprintf(b, sizeof b, "%.2f", v); break;
+    }
+    return b;
+}
+
+// Reads what a person types into a host field. Returns the real value (not clamped; the host clamps).
+inline float parseValue(int id, const std::string &text)
+{
+    const ParamInfo &p = paramInfo(id);
+    if (p.toggle) {
+        std::string t;
+        for (char ch : text) t += (char) std::tolower((unsigned char) ch);
+        return (t.find("on") != std::string::npos || t.find('1') != std::string::npos || t.find("true") != std::string::npos) ? 1.0f : 0.0f;
+    }
+    const float n = (float) std::atof(text.c_str());
+    const bool hasMs = text.find("ms") != std::string::npos || text.find("MS") != std::string::npos;
+    const bool hasK  = text.find('k') != std::string::npos || text.find('K') != std::string::npos;
+    switch (id) {
+        case kBody:      return hasMs ? n / 1000.0f : (text.find('s') != std::string::npos ? n : n / 1000.0f);   // bare number = ms
+        case kEchoTime:  return hasMs ? n / 1000.0f : n;                                                          // bare number = s
+        case kLpfCutoff:
+        case kHpfCutoff: return hasK ? n * 1000.0f : n;
+        default:         return n;
+    }
 }
 
 } // namespace audrey
