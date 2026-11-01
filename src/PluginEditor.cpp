@@ -280,6 +280,16 @@ void AudreyEditor::paint (juce::Graphics& g)
     g.strokePath (flowLines, juce::PathStrokeType (1.0f));
     g.fillPath (arrowHeads);
 
+    // dark backing behind each value + name so the ring graphics never run through the text
+    g.setColour (AudreyLookAndFeel::background().withAlpha (0.9f));
+    for (const auto& cell : cells)
+    {
+        if (cell.slider == nullptr) continue;
+        const float top = (float) cell.slider->getBottom() - (float) kValueH - 1.0f;
+        const float cx = cell.labelBounds.getCentreX();
+        g.fillRoundedRectangle (cx - 52.0f, top, 104.0f, cell.labelBounds.getBottom() + 2.0f - top, 6.0f);
+    }
+
     // names under the value boxes
     g.setFont (juce::FontOptions (13.5f));
     for (const auto& cell : cells)
