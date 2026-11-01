@@ -62,6 +62,15 @@ juce::Label* AudreyLookAndFeel::createSliderTextBox (juce::Slider& slider)
     return l;
 }
 
+void AudreyLookAndFeel::drawLabel (juce::Graphics& g, juce::Label& label)
+{
+    if (label.isBeingEdited()) return;   // the text editor draws itself
+    g.setColour (label.findColour (juce::Label::textColourId));
+    g.setFont (getLabelFont (label));
+    g.drawFittedText (label.getText(), label.getLocalBounds().reduced (2, 0), label.getJustificationType(), 1,
+                      label.getMinimumHorizontalScale());
+}
+
 void AudreyLookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton& b, bool highlighted, bool)
 {
     const bool on = b.getToggleState();
@@ -99,23 +108,23 @@ namespace
     // Signal flow: Frequency -> string ring (Feedback Gain) -> reverb -> filters -> Body -> back to the string,
     // then the echo on the right. Extra Touch controls run along the bottom.
     const Place kPlaces[] = {
-        { kFeedbackGain,    280, 195, 104 },
-        { kPitchOffset,     138, 362,  84 },
-        { kReverbMix,       563, 108,  58 },
-        { kReverbDecay,     565, 278,  58 },
-        { kLpfCutoff,       420, 360,  58 },
-        { kHpfCutoff,       707, 362,  58 },
-        { kBody,            550, 440,  98 },
+        { kFeedbackGain,    280, 195, 128 },
+        { kPitchOffset,     138, 362,  96 },
+        { kReverbMix,       563, 108,  68 },
+        { kReverbDecay,     565, 278,  68 },
+        { kLpfCutoff,       420, 360,  68 },
+        { kHpfCutoff,       707, 362,  68 },
+        { kBody,            550, 440, 118 },
         { kBodyTune,        707, 480,   0 },
-        { kEchoSend,        980, 278,  58 },
-        { kEchoFeedback,    850, 360,  58 },
-        { kEchoTime,        990, 440,  98 },
-        { kOutputVolume,    990, 108,  58 },
-        { kInputVolume,     130, 700,  58 },
-        { kEnvelopeShape,   270, 700,  58 },
+        { kEchoSend,        980, 278,  68 },
+        { kEchoFeedback,    850, 360,  68 },
+        { kEchoTime,        990, 440, 118 },
+        { kOutputVolume,    990, 108,  68 },
+        { kInputVolume,     130, 700,  68 },
+        { kEnvelopeShape,   270, 700,  68 },
         { kDroneOn,         380, 700,   0 },
-        { kLfoFrequency,    560, 700,  58 },
-        { kLfoDistribution, 700, 700,  58 },
+        { kLfoFrequency,    560, 700,  68 },
+        { kLfoDistribution, 700, 700,  68 },
         { kLfoOn,           810, 700,   0 },
     };
 
@@ -227,9 +236,9 @@ void AudreyEditor::resized()
         }
     };
     const float pi = juce::MathConstants<float>::pi;
-    rings (280, 195, 64, 168, 3.4f, pi, pi * 0.999f);   // feedback gain: almost full circles
-    rings (550, 440, 64, 150, 6.0f, pi, pi * 0.62f);    // body: lower arcs
-    rings (990, 440, 64, 140, 6.5f, pi * 0.85f, pi * 0.50f);   // echo time: lower right arcs
+    rings (280, 195, 72, 172, 3.4f, pi, pi * 0.999f);   // feedback gain: almost full circles
+    rings (550, 440, 72, 152, 6.0f, pi, pi * 0.62f);    // body: lower arcs
+    rings (990, 440, 72, 142, 6.5f, pi * 0.85f, pi * 0.50f);   // echo time: lower right arcs
     rings (990, 108, 40, 66, 5.5f, pi * 0.25f, pi * 0.40f);    // volume: small upper right arcs
 
     // ---- signal-flow hairlines

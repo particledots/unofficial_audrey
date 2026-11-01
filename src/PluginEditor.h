@@ -18,6 +18,8 @@ public:
     // LookAndFeel_V4 only applies the slider text-box outline colour for non-midnight schemes, so a light
     // outline showed under the default scheme. Set the label colours and font here instead.
     juce::Label* createSliderTextBox (juce::Slider&) override;
+    // value boxes: text only, no outline or fill (the default draws a light box around the text)
+    void drawLabel (juce::Graphics&, juce::Label&) override;
 
     static juce::Colour background() { return juce::Colour (0xff09090b); }
     static juce::Colour line()       { return juce::Colour (0xffd9d5cb); }
