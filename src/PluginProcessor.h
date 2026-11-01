@@ -1,10 +1,10 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
-#include <memory>
-#include "FeedbackSynthEngine.h"
+#include <atomic>
+#include "AudreyController.h"
 
-// Phase 1 skeleton: the Audrey engine runs with fixed settings, MIDI notes set the
-// pitch and trigger the envelope. Host-automatable parameters come in Phase 2.
+// Unofficial Audrey: the Audrey feedback-synth engine as a MIDI-controlled effect.
+// Phase 2: 17 host-automatable parameters (see control/AudreyParams.h), smoothed, plus state save/restore.
 class AudreyProcessor : public juce::AudioProcessor
 {
 public:
@@ -31,16 +31,20 @@ public:
     const juce::String getProgramName (int) override { return {}; }
     void changeProgramName (int, const juce::String&) override {}
 
-    void getStateInformation (juce::MemoryBlock&) override {}
-    void setStateInformation (const void*, int) override {}
+    void getStateInformation (juce::MemoryBlock&) override;
+    void setStateInformation (const void*, int) override;
+
+    juce::AudioProcessorValueTreeState apvts;
 
 private:
+    static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
+
     void renderRange (juce::AudioBuffer<float>& buffer, int start, int end);
     void handleMidi (const juce::MidiMessage& m);
+    void syncParameters();
 
-    std::unique_ptr<infrasonic::FeedbackSynth::Engine> engine;
-    bool engineReady = false;
-    int heldNote = -1;
+    audrey::Controller controller;
+    std::atomic<float>* rawParam[audrey::kNumParams] = {};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudreyProcessor)
 };

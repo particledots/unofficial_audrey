@@ -17,13 +17,14 @@ add_library(audrey_core STATIC
   src/engine/KarplusString.cpp
   src/engine/BiquadFilters.cpp
   src/engine/DCBlock.cpp
+  src/control/AudreyController.cpp
   third_party/daisysp/limiter.cpp
   third_party/daisysp/crossfade.cpp
   third_party/daisysp/overdrive.cpp
   third_party/daisysp/oscillator.cpp
   third_party/daisysp-lgpl/reverbsc.cpp
   third_party/daisysp-lgpl/tone.cpp)
-target_include_directories(audrey_core PUBLIC src/engine)
+target_include_directories(audrey_core PUBLIC src/engine src/control)
 # tone.cpp (LGPL folder) includes "dsp.h" from the MIT folder
 target_include_directories(audrey_core PRIVATE third_party/daisysp)
 set_target_properties(audrey_core PROPERTIES POSITION_INDEPENDENT_CODE ON)

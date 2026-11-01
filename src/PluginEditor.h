@@ -2,12 +2,9 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 
-class AudreyEditor : public juce::AudioProcessorEditor
+// Interim editor: JUCE's generic parameter sliders. The real UI replaces this later in Phase 2.
+class AudreyEditor : public juce::GenericAudioProcessorEditor
 {
 public:
-    explicit AudreyEditor (AudreyProcessor&);
-    void paint (juce::Graphics&) override;
-
-private:
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudreyEditor)
+    explicit AudreyEditor (AudreyProcessor& p) : juce::GenericAudioProcessorEditor (p) { setSize (440, 720); }
 };
