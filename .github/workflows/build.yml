@@ -21,7 +21,7 @@ jobs:
           cmake --build build --target engine_test -j4 > build_log.txt 2>&1 || {
             grep -E "error|Error" build_log.txt | head -8 | while IFS= read -r line; do echo "::error::BUILD: $line"; done
             tail -5 build_log.txt; exit 1; }
-          ./build/engine_test > test_log.txt 2>&1; code=$?
+          ./build/engine_test > test_log.txt 2>&1 && code=0 || code=$?
           cat test_log.txt
           echo "::notice::TEST $(tail -1 test_log.txt)"
           grep -E "FAIL" test_log.txt | head -8 | while IFS= read -r line; do echo "::error::TEST: $line"; done
@@ -34,9 +34,11 @@ jobs:
             tail -20 state_build_log.txt; exit 1; }
           bin="$(find build -name AudreyStateTest -type f -perm -u+x | head -1)"
           echo "state test binary: $bin"
-          "$bin" > state_log.txt 2>&1; code=$?
+          "$bin" > state_log.txt 2>&1 && code=0 || code=$?
           cat state_log.txt
-          echo "::notice::STATETEST $(tail -1 state_log.txt)"
+          echo "::notice::STATETEST exit $code: $(tail -1 state_log.txt)"
+          # also surface the first lines of the log as annotations (job logs are not readable from outside)
+          head -12 state_log.txt | while IFS= read -r line; do echo "::notice::STATETEST LOG: $line"; done
           grep -E "FAIL" state_log.txt | head -8 | while IFS= read -r line; do echo "::error::STATETEST: $line"; done
           grep -E "^(state|CC -> host|body default|audio after)" state_log.txt | while IFS= read -r line; do echo "::notice::STATETEST $line"; done
           exit $code
