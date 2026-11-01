@@ -32,9 +32,9 @@ void AudreyLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w
     track.addCentredArc (centre.x, centre.y, ringR, ringR, 0.0f, startAngle, endAngle, true);
     value.addCentredArc (centre.x, centre.y, ringR, ringR, 0.0f, startAngle, angle, true);
     g.setColour (dim().withAlpha (0.45f));
-    g.strokePath (track, juce::PathStrokeType (1.2f, juce::PathStrokeType::curved, juce::PathStrokeType::butt));
+    g.strokePath (track, juce::PathStrokeType (1.2f * uiScale, juce::PathStrokeType::curved, juce::PathStrokeType::butt));
     g.setColour (slider.isEnabled() ? line() : dim());
-    g.strokePath (value, juce::PathStrokeType (2.4f, juce::PathStrokeType::curved, juce::PathStrokeType::butt));
+    g.strokePath (value, juce::PathStrokeType (2.4f * uiScale, juce::PathStrokeType::curved, juce::PathStrokeType::butt));
 
     // black skirt, white cap
     const float skirtR = radius * 0.86f, capR = radius * 0.72f;
@@ -45,7 +45,7 @@ void AudreyLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w
 
     // pointer notch on the cap
     juce::Path pointer;
-    pointer.addRoundedRectangle (-1.6f, -capR * 0.92f, 3.2f, capR * 0.5f, 1.6f);
+    pointer.addRoundedRectangle (-1.6f * uiScale, -capR * 0.92f, 3.2f * uiScale, capR * 0.5f, 1.6f * uiScale);
     g.setColour (juce::Colour (0xff17171a));
     g.fillPath (pointer, juce::AffineTransform::rotation (angle).translated (centre.x, centre.y));
 }
@@ -66,7 +66,7 @@ void AudreyLookAndFeel::drawLabel (juce::Graphics& g, juce::Label& label)
 {
     if (label.isBeingEdited()) return;   // the text editor draws itself
     g.setColour (label.findColour (juce::Label::textColourId));
-    g.setFont (getLabelFont (label));
+    g.setFont (juce::FontOptions (12.0f * uiScale));
     g.drawFittedText (label.getText(), label.getLocalBounds().reduced (2, 0), label.getJustificationType(), 1,
                       label.getMinimumHorizontalScale());
 }
@@ -75,21 +75,22 @@ void AudreyLookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton&
 {
     const bool on = b.getToggleState();
     const auto area = b.getLocalBounds().toFloat();
-    const auto sw = juce::Rectangle<float> (38.0f, 18.0f).withCentre ({ area.getCentreX(), area.getY() + 14.0f });
+    const float u = uiScale;
+    const auto sw = juce::Rectangle<float> (38.0f * u, 18.0f * u).withCentre ({ area.getCentreX(), area.getY() + 14.0f * u });
 
     g.setColour (on ? knob() : juce::Colour (0xff17171a));
-    g.fillRoundedRectangle (sw, 9.0f);
+    g.fillRoundedRectangle (sw, 9.0f * u);
     g.setColour (highlighted ? text() : line().withAlpha (0.8f));
-    g.drawRoundedRectangle (sw, 9.0f, 1.2f);
+    g.drawRoundedRectangle (sw, 9.0f * u, 1.2f * u);
 
-    const float d = 12.0f;
-    const float kx = on ? sw.getRight() - 3.0f - d : sw.getX() + 3.0f;
+    const float d = 12.0f * u;
+    const float kx = on ? sw.getRight() - 3.0f * u - d : sw.getX() + 3.0f * u;
     g.setColour (on ? juce::Colour (0xff17171a) : line());
     g.fillEllipse (kx, sw.getCentreY() - d * 0.5f, d, d);
 
     g.setColour (on ? text() : dim());
-    g.setFont (juce::FontOptions (12.5f));
-    g.drawText (b.getButtonText(), area.withTrimmedTop (28.0f), juce::Justification::centredTop);
+    g.setFont (juce::FontOptions (12.5f * u));
+    g.drawText (b.getButtonText(), area.withTrimmedTop (28.0f * u), juce::Justification::centredTop);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -98,10 +99,10 @@ void AudreyLookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton&
 namespace
 {
     constexpr float kRefW = 1200.0f, kRefH = 840.0f;   // layout is designed on this canvas, then scaled
-    constexpr float kScale = 0.85f;
+    constexpr float kScale = 0.85f;                    // scale of the default window
+    constexpr float kAspect = kRefW / kRefH;
+    constexpr int kMinWidth = 612, kMaxWidth = 2040;
     constexpr int kWidth  = (int) (kRefW * kScale);    // 1020
-    constexpr int kHeight = (int) (kRefH * kScale);    // 714
-    constexpr int kValueH = 16;                        // value text box under each knob
 
     struct Place { int id; float x, y, dia; };
 
@@ -154,10 +155,9 @@ namespace
         }
     }
 
-    juce::Point<float> sc (float x, float y) { return { x * kScale, y * kScale }; }
 }
 
-AudreyEditor::AudreyEditor (AudreyProcessor& p) : juce::AudioProcessorEditor (p)
+AudreyEditor::AudreyEditor (AudreyProcessor& p) : juce::AudioProcessorEditor (p), proc (p)
 {
     setLookAndFeel (&laf);
 
@@ -179,7 +179,7 @@ AudreyEditor::AudreyEditor (AudreyProcessor& p) : juce::AudioProcessorEditor (p)
         {
             cell.slider = std::make_unique<juce::Slider> (juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::TextBoxBelow);
             cell.slider->setRotaryParameters (juce::MathConstants<float>::pi * 1.25f, juce::MathConstants<float>::pi * 2.75f, true);
-            cell.slider->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, kValueH);
+            cell.slider->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, valueH);
             cell.slider->setTextBoxIsEditable (true);
             cell.slider->setMouseDragSensitivity (180);
             addAndMakeVisible (*cell.slider);
@@ -192,7 +192,16 @@ AudreyEditor::AudreyEditor (AudreyProcessor& p) : juce::AudioProcessorEditor (p)
         }
     }
 
-    setSize (kWidth, kHeight);
+    // resizable, keeping the panel's proportions; the last size is kept in the saved state
+    constrainer.setFixedAspectRatio ((double) kAspect);
+    constrainer.setSizeLimits (kMinWidth, (int) (kMinWidth / kAspect), kMaxWidth, (int) (kMaxWidth / kAspect));
+    setConstrainer (&constrainer);
+    setResizable (true, true);
+
+    int w = kWidth;
+    const juce::var saved = p.apvts.state.getProperty ("editorWidth");
+    if (saved.isInt() || saved.isInt64() || saved.isDouble()) w = juce::jlimit (kMinWidth, kMaxWidth, (int) saved);
+    setSize (w, (int) std::lround ((double) w / kAspect));
 }
 
 AudreyEditor::~AudreyEditor()
@@ -202,6 +211,13 @@ AudreyEditor::~AudreyEditor()
 
 void AudreyEditor::resized()
 {
+    const float S = (float) getWidth() / kRefW;     // reference canvas -> pixels
+    const float u = S / kScale;                      // 1.0 at the default size
+    laf.setUiScale (u);
+    valueH = juce::jmax (10, (int) std::lround (16.0f * u));
+    auto sc = [S] (float x, float y) { return juce::Point<float> { x * S, y * S }; };
+    if (getWidth() > 0) proc.apvts.state.setProperty ("editorWidth", getWidth(), nullptr);
+
     for (auto& cell : cells)
     {
         if (cell.paramId < 0) continue;
@@ -209,14 +225,15 @@ void AudreyEditor::resized()
 
         if (cell.slider != nullptr)
         {
-            const float d = cell.dia * kScale;
-            const float w = juce::jmax (d, 84.0f);
-            cell.slider->setBounds (juce::Rectangle<float> (c.x - w * 0.5f, c.y - d * 0.5f, w, d + (float) kValueH).toNearestInt());
-            cell.labelBounds = { c.x - 70.0f, c.y + d * 0.5f + (float) kValueH + 1.0f, 140.0f, 16.0f };
+            const float d = cell.dia * S;
+            const float w = juce::jmax (d, 84.0f * u);
+            cell.slider->setTextBoxStyle (juce::Slider::TextBoxBelow, false, (int) (80.0f * u), valueH);
+            cell.slider->setBounds (juce::Rectangle<float> (c.x - w * 0.5f, c.y - d * 0.5f, w, d + (float) valueH).toNearestInt());
+            cell.labelBounds = { c.x - 70.0f * u, c.y + d * 0.5f + (float) valueH + 1.0f, 140.0f * u, 16.0f * u };
         }
         else if (cell.toggle != nullptr)
         {
-            cell.toggle->setBounds (juce::Rectangle<float> (c.x - 60.0f, c.y - 14.0f, 120.0f, 50.0f).toNearestInt());
+            cell.toggle->setBounds (juce::Rectangle<float> (c.x - 60.0f * u, c.y - 14.0f * u, 120.0f * u, 50.0f * u).toNearestInt());
         }
     }
 
@@ -231,8 +248,8 @@ void AudreyEditor::resized()
             const float span = halfSpan * (0.65f + 0.35f * rnd.nextFloat());
             const float a0 = centreAngle - span + (rnd.nextFloat() - 0.5f) * 0.5f;
             const float a1 = centreAngle + span + (rnd.nextFloat() - 0.5f) * 0.5f;
-            ringArt.startNewSubPath (c.x + std::sin (a0) * r * kScale, c.y - std::cos (a0) * r * kScale);
-            ringArt.addCentredArc (c.x, c.y, r * kScale, r * kScale, 0.0f, a0, a1, true);
+            ringArt.startNewSubPath (c.x + std::sin (a0) * r * S, c.y - std::cos (a0) * r * S);
+            ringArt.addCentredArc (c.x, c.y, r * S, r * S, 0.0f, a0, a1, true);
         }
     };
     const float pi = juce::MathConstants<float>::pi;
@@ -246,7 +263,7 @@ void AudreyEditor::resized()
     arrowHeads.clear();
     auto arrow = [&] (juce::Point<float> tip, float dirX, float dirY)   // dir = direction of travel
     {
-        const float s = 6.0f;
+        const float s = 6.0f * u;
         const juce::Point<float> back { tip.x - dirX * s, tip.y - dirY * s };
         arrowHeads.startNewSubPath (tip);
         arrowHeads.lineTo (back.x - dirY * s * 0.55f, back.y + dirX * s * 0.55f);
@@ -271,13 +288,14 @@ void AudreyEditor::resized()
 
 void AudreyEditor::paint (juce::Graphics& g)
 {
+    const float u = (float) getWidth() / kRefW / kScale;
     g.fillAll (AudreyLookAndFeel::background());
 
     g.setColour (AudreyLookAndFeel::line().withAlpha (0.55f));
-    g.strokePath (ringArt, juce::PathStrokeType (0.9f));
+    g.strokePath (ringArt, juce::PathStrokeType (0.9f * u));
 
     g.setColour (AudreyLookAndFeel::line().withAlpha (0.7f));
-    g.strokePath (flowLines, juce::PathStrokeType (1.0f));
+    g.strokePath (flowLines, juce::PathStrokeType (1.0f * u));
     g.fillPath (arrowHeads);
 
     // dark backing behind each value + name so the ring graphics never run through the text
@@ -285,13 +303,13 @@ void AudreyEditor::paint (juce::Graphics& g)
     for (const auto& cell : cells)
     {
         if (cell.slider == nullptr) continue;
-        const float top = (float) cell.slider->getBottom() - (float) kValueH - 1.0f;
+        const float top = (float) cell.slider->getBottom() - (float) valueH - 1.0f;
         const float cx = cell.labelBounds.getCentreX();
-        g.fillRoundedRectangle (cx - 52.0f, top, 104.0f, cell.labelBounds.getBottom() + 2.0f - top, 6.0f);
+        g.fillRoundedRectangle (cx - 52.0f * u, top, 104.0f * u, cell.labelBounds.getBottom() + 2.0f * u - top, 6.0f * u);
     }
 
     // names under the value boxes
-    g.setFont (juce::FontOptions (13.5f));
+    g.setFont (juce::FontOptions (13.5f * u));
     for (const auto& cell : cells)
     {
         if (cell.slider == nullptr) continue;
@@ -301,12 +319,12 @@ void AudreyEditor::paint (juce::Graphics& g)
 
     // title and notes
     g.setColour (AudreyLookAndFeel::text());
-    g.setFont (juce::FontOptions (21.0f));
-    g.drawText ("unofficial audrey", 24, 16, 300, 28, juce::Justification::centredLeft);
+    g.setFont (juce::FontOptions (21.0f * u));
+    g.drawText ("unofficial audrey", (int) (24 * u), (int) (16 * u), (int) (300 * u), (int) (28 * u), juce::Justification::centredLeft);
 
     g.setColour (AudreyLookAndFeel::dim());
-    g.setFont (juce::FontOptions (11.5f));
-    g.drawText ("play MIDI notes  |  CC 7 12 70 72 74 75 76 77 81 91 123", getWidth() - 440, 20, 416, 20, juce::Justification::centredRight);
+    g.setFont (juce::FontOptions (11.5f * u));
+    g.drawText ("play MIDI notes  |  CC 7 12 70 72 74 75 76 77 81 91 123", getWidth() - (int) (440 * u), (int) (20 * u), (int) (416 * u), (int) (20 * u), juce::Justification::centredRight);
     g.drawText ("Based on the open-source Audrey firmware (Infrasonic Audio / Synthux Academy, MIT). Not a Synthux Academy product.",
-                24, getHeight() - 26, getWidth() - 48, 18, juce::Justification::centredLeft);
+                (int) (24 * u), getHeight() - (int) (26 * u), getWidth() - (int) (48 * u), (int) (18 * u), juce::Justification::centredLeft);
 }

@@ -21,12 +21,17 @@ public:
     // value boxes: text only, no outline or fill (the default draws a light box around the text)
     void drawLabel (juce::Graphics&, juce::Label&) override;
 
+    void setUiScale (float s) { uiScale = s; }   // 1.0 = the default 1020 px wide window
+
     static juce::Colour background() { return juce::Colour (0xff09090b); }
     static juce::Colour line()       { return juce::Colour (0xffd9d5cb); }
     static juce::Colour knob()       { return juce::Colour (0xfff3f0e8); }
     static juce::Colour text()       { return juce::Colour (0xffe6e2d8); }
     static juce::Colour dim()        { return juce::Colour (0xff8c8980); }
     static juce::Colour accent()     { return juce::Colour (0xffe8b04a); }
+
+private:
+    float uiScale = 1.0f;
 };
 
 class AudreyEditor : public juce::AudioProcessorEditor
@@ -50,7 +55,10 @@ private:
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> buttonAttachment;
     };
 
+    AudreyProcessor& proc;
     AudreyLookAndFeel laf;
+    juce::ComponentBoundsConstrainer constrainer;   // keeps the panel's proportions while resizing
+    int valueH = 16;                                // value text box height at the current scale
     std::array<Cell, audrey::kNumParams> cells;
     juce::Path ringArt;     // concentric ring graphics
     juce::Path flowLines;   // signal-flow hairlines
