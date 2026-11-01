@@ -52,6 +52,16 @@ void AudreyLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int w
     g.fillPath (pointer, juce::AffineTransform::rotation (angle).translated (centre.x, centre.y));
 }
 
+juce::Label* AudreyLookAndFeel::createSliderTextBox (juce::Slider& slider)
+{
+    auto* l = juce::LookAndFeel_V4::createSliderTextBox (slider);
+    l->setColour (juce::Label::outlineColourId, juce::Colours::transparentBlack);
+    l->setColour (juce::Label::backgroundColourId, juce::Colours::transparentBlack);
+    l->setColour (juce::Label::textColourId, text());
+    l->setColour (juce::Label::outlineWhenEditingColourId, accent());
+    return l;
+}
+
 void AudreyLookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton& b, bool highlighted, bool)
 {
     const auto r = b.getLocalBounds().toFloat().reduced (4.0f, 14.0f);

@@ -12,6 +12,9 @@ public:
     void drawRotarySlider (juce::Graphics&, int x, int y, int width, int height, float sliderPos,
                            float rotaryStartAngle, float rotaryEndAngle, juce::Slider&) override;
     void drawToggleButton (juce::Graphics&, juce::ToggleButton&, bool highlighted, bool down) override;
+    // LookAndFeel_V4 only applies the slider text-box outline colour for non-midnight schemes, so a light
+    // outline showed under the default scheme. Set the label colours here instead.
+    juce::Label* createSliderTextBox (juce::Slider&) override;
 
     static juce::Colour background()  { return juce::Colour (0xff15171b); }
     static juce::Colour panel()       { return juce::Colour (0xff1e2127); }
