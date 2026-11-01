@@ -36,6 +36,8 @@ target_link_libraries(engine_test PRIVATE audrey_core)
 # Offline pitch measurement tool (renders one note to a raw float file)
 add_executable(pitch_check EXCLUDE_FROM_ALL tools/pitch_check.cpp)
 target_link_libraries(pitch_check PRIVATE audrey_core)
+add_executable(tune_check EXCLUDE_FROM_ALL tools/tune_check.cpp)
+target_link_libraries(tune_check PRIVATE audrey_core)
 
 if(AUDREY_BUILD_PLUGIN)
   include(FetchContent)

@@ -227,6 +227,49 @@ static void test_midi_cc() {
     CHECK(loud > 0.01 && quiet < 1e-4, "CC7=0 should mute (%.5f -> %.6f)", loud, quiet);
 }
 
+static void test_body_tune() {
+    const float sr = 48000.f; float l, r;
+    auto f0 = [](float note) { return 440.0f * std::pow(2.0f, (note - 69.0f) / 12.0f); };
+    auto settle = [&](Controller &c) { for (int i = 0; i < 48000; ++i) c.process(0.f, l, r); };
+
+    // off (default): the engine gets the Body setting untouched
+    Controller c; c.prepare(sr); c.setParam(kBody, 0.0105f); c.noteOn(60); settle(c);
+    CHECK(c.getParam(kBodyTune) == 0.f, "Body Tune must default to off");
+    CHECK(std::fabs(c.getEffectiveBody() - 0.0105f) < 1e-6f, "Body changed with Body Tune off (%g)", c.getEffectiveBody());
+
+    // on: a whole number of periods, nearest the setting (261.6 Hz: 10.5 ms is 2.75 periods -> 3 periods)
+    c.setParam(kBodyTune, 1.f); settle(c);
+    const float period = 1.0f / f0(60.f);
+    CHECK(std::fabs(c.getEffectiveBody() - 3.0f * period) < 1e-6f, "tuned body %g, expected %g", c.getEffectiveBody(), 3.0f * period);
+
+    // follows the note
+    c.noteOn(67); settle(c);
+    const float k67 = std::round(0.0105f * f0(67.f));
+    CHECK(std::fabs(c.getEffectiveBody() - k67 / f0(67.f)) < 1e-6f, "body did not follow the note (%g)", c.getEffectiveBody());
+
+    // always a whole number of periods and always inside 1..100 ms, for every note, offset and a spread of Body settings
+    int bad = 0;
+    for (int note = 16; note <= 88; ++note)
+        for (float body : {0.001f, 0.0034f, 0.01f, 0.0477f, 0.1f}) {
+            Controller t; t.prepare(sr); t.setParam(kBody, body); t.setParam(kBodyTune, 1.f); t.noteOn(note);
+            for (int i = 0; i < 4800; ++i) t.process(0.f, l, r);
+            const float eb = t.getEffectiveBody(), periods = eb * f0((float) note);
+            if (eb < 0.001f - 1e-6f || eb > 0.1f + 1e-6f || std::fabs(periods - std::round(periods)) > 1e-3f || std::round(periods) < 1.f) ++bad;
+        }
+    CHECK(bad == 0, "%d note/body combinations gave a body that is not whole periods inside 1-100 ms", bad);
+
+    // CC 70 and the offset retune the body too
+    Controller d; d.prepare(sr); d.setParam(kBody, 0.01f); d.setParam(kBodyTune, 1.f); d.handleCC(70, 64); settle(d);
+    const float fp = f0(16.f + 72.f * 64.f / 127.f);
+    CHECK(std::fabs(d.getEffectiveBody() * fp - std::round(d.getEffectiveBody() * fp)) < 1e-3f, "CC70 pitch: body not whole periods");
+
+    // while the LFO drives the body, tuning is left alone (LFO on -> no body writes); switching it off restores a tuned body
+    Controller e; e.prepare(sr); e.setParam(kBodyTune, 1.f); e.setParam(kBody, 0.02f); e.noteOn(50);
+    e.setParam(kLfoOn, 1.f); settle(e); e.setParam(kLfoOn, 0.f); settle(e);
+    const float pe = e.getEffectiveBody() * f0(50.f);
+    CHECK(std::fabs(pe - std::round(pe)) < 1e-3f, "body not retuned after the LFO was switched off");
+}
+
 static unsigned rng_state = 12345u;
 static float rnd() { rng_state ^= rng_state << 13; rng_state ^= rng_state >> 17; rng_state ^= rng_state << 5; return (rng_state >> 8) * (1.f / 16777216.f); }
 
@@ -332,6 +375,7 @@ int main() {
     test_text();
     test_smoothing_and_pitch();
     test_midi_cc();
+    test_body_tune();
     test_automation_stress();
     test_controller_determinism();
 

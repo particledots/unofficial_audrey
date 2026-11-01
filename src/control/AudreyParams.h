@@ -31,6 +31,7 @@ enum ParamId : int {
     kEchoSend,          // 0..1
     kEchoTime,          // seconds
     kEchoFeedback,      // 0..1.5
+    kBodyTune,          // toggle: snap Body to a whole number of periods of the played note (plugin addition)
     kNumParams
 };
 
@@ -81,6 +82,7 @@ inline const ParamInfo *paramTable()
         { "echo_send",      "Echo Send",        "",       0.0f,   1.0f,   0.0f,   Curve::Square,   false, 30.0f },
         { "echo_time",      "Echo Time",        "s",      0.05f,  5.0f,   0.5f,   Curve::Square,   false, 30.0f },
         { "echo_feedback",  "Echo Feedback",    "",       0.0f,   1.5f,   0.0f,   Curve::Linear,   false, 30.0f },
+        { "body_tune",      "Body Tune",        "",       0.0f,   1.0f,   0.0f,   Curve::Linear,   true,   0.0f },
     };
     return t;
 }
@@ -152,7 +154,8 @@ inline std::string formatValue(int id, float v)
         case kLfoFrequency:  std::snprintf(b, sizeof b, v < 1.0f ? "%.3f Hz" : "%.2f Hz", v); break;
         case kEchoTime:      std::snprintf(b, sizeof b, "%.2f s", v); break;
         case kLfoOn:
-        case kDroneOn:       std::snprintf(b, sizeof b, "%s", v >= 0.5f ? "On" : "Off"); break;
+        case kDroneOn:
+        case kBodyTune:      std::snprintf(b, sizeof b, "%s", v >= 0.5f ? "On" : "Off"); break;
         default:             std::snprintf(b, sizeof b, std::fabs(v) < 1.0f ? "%.3f" : "%.2f", v); break;
     }
     return b;

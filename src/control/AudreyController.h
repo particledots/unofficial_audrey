@@ -51,12 +51,18 @@ public:
 
     int getHeldNote() const { return heldNote_; }
 
+    // Body delay (seconds) the engine is using now. With Body Tune on this is a whole number of periods of the
+    // string pitch, nearest to the Body setting and kept inside the Body range (1-100 ms).
+    float getEffectiveBody() const { return effectiveBody(); }
+
     void process(float in, float &outL, float &outR);
 
 private:
     void tick();                       // smooth + apply, once per control block
     void apply(int id, bool force);    // push one parameter to the engine if it changed
     void applyPitch();
+    void applyBody(bool force);
+    float effectiveBody() const;
 
     std::unique_ptr<infrasonic::FeedbackSynth::Engine> engine_;
     bool ready_ = false;
@@ -67,6 +73,7 @@ private:
     float pitchSent_ = -1000.0f;
     bool lfoWasOn_ = false;
     float pitchOverride_ = -1.0f;      // >= 0: CC 70 pitch in use
+    float bodySent_ = -1.0f;
 
     float target_[kNumParams] = {};
     float current_[kNumParams] = {};

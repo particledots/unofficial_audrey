@@ -22,6 +22,7 @@ bool Controller::prepare(float sampleRate)
     heldNote_ = -1;
     baseNote_ = kDefaultNote;
     pitchOverride_ = -1.0f;
+    bodySent_ = -1.0f;
     pitchSent_ = -1000.0f;
     lfoWasOn_ = false;
     counter_ = 0;
@@ -83,7 +84,32 @@ void Controller::applyPitch()
     if (note != pitchSent_) {
         engine_->SetStringPitch(note);
         pitchSent_ = note;
+        applyBody(false);   // Body Tune follows the pitch
     }
+}
+
+// The feedback loop only sustains where the body delay's comb lines up with a string harmonic, so with a
+// free Body the loop sings near 1/body whatever note is played (Phase 2 pitch sweeps). A body of k whole
+// periods of the note puts a comb tooth on the note itself.
+float Controller::effectiveBody() const
+{
+    const float body = current_[kBody];
+    if (current_[kBodyTune] < 0.5f || pitchSent_ < 0.0f) return body;
+    const float f0 = 440.0f * std::pow(2.0f, (pitchSent_ - 69.0f) / 12.0f);
+    const float lo = std::max(1.0f, std::ceil(paramInfo(kBody).min * f0 - 1e-4f));
+    const float hi = std::floor(paramInfo(kBody).max * f0 + 1e-4f);
+    if (!(hi >= lo)) return body;
+    const float k = std::min(std::max(std::round(body * f0), lo), hi);
+    return k / f0;
+}
+
+void Controller::applyBody(bool force)
+{
+    if (!engine_ || current_[kLfoOn] >= 0.5f) return;   // the LFO drives the body while it is on
+    const float b = effectiveBody();
+    if (!force && b == bodySent_) return;
+    bodySent_ = b;
+    engine_->SetFeedbackDelay(b);
 }
 
 void Controller::apply(int id, bool force)
@@ -95,7 +121,8 @@ void Controller::apply(int id, bool force)
     switch (id) {
         case kPitchOffset:     applyPitch(); break;
         case kFeedbackGain:    e.SetFeedbackGain(v); break;
-        case kBody:            if (current_[kLfoOn] < 0.5f) e.SetFeedbackDelay(v); break;   // the LFO drives the body while it is on
+        case kBody:
+        case kBodyTune:        applyBody(force); break;
         case kLpfCutoff:       e.SetFeedbackLPFCutoff(v); break;
         case kHpfCutoff:       e.SetFeedbackHPFCutoff(v); break;
         case kReverbMix:       e.SetReverbMix(v); break;

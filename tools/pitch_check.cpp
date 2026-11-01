@@ -2,6 +2,7 @@
 // writes the left channel as raw float32 to a file.
 //   pitch_check <note> <body_ms> <sample_rate> <seconds> <out.raw> [gain_db] [lpf] [hpf] [pluck] [reverb_mix]
 //   pluck=1: input level 1 and a single-sample impulse at t=0 (string excited, no noise build-up).
+//   pluck=2: input level 1 and a 50 ms white-noise burst (amplitude 0.5) at t=0, like audio fed to the input.
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
@@ -35,8 +36,12 @@ int main(int argc, char **argv) {
     e->NoteOn();
 
     const long n = (long) (sr * seconds);
+    unsigned rng = 2463534242u;
     std::vector<float> out((size_t) n);
-    for (long i = 0; i < n; ++i) { float l, r; e->Process((pluck && i == 0) ? 1.0f : 0.0f, l, r); out[(size_t) i] = l; }
+    for (long i = 0; i < n; ++i) { float in = 0.0f;
+        if (pluck == 1 && i == 0) in = 1.0f;
+        if (pluck == 2 && i < (long) (0.05f * sr)) { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; in = 0.5f * ((float) (rng >> 8) * (2.0f / 16777216.0f) - 1.0f); }
+        float l, r; e->Process(in, l, r); out[(size_t) i] = l; }
     FILE *f = std::fopen(argv[5], "wb");
     if (!f) return 4;
     std::fwrite(out.data(), sizeof(float), out.size(), f);

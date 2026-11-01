@@ -91,7 +91,7 @@ namespace
     constexpr int kTitleH = 58;
     constexpr int kFooterH = 30;
 
-    constexpr int kRowW = 9;         // widest row, in cells
+    constexpr int kRowW = 10;        // widest row, in cells
     constexpr int kWidth = kMargin * 2 + kRowW * kCellW + 4 * (kGroupPad * 2) + 3 * kGap;   // widest row: 4 groups
     constexpr int kHeight = kTitleH + 2 * (kGroupHeader + kCellH + kGroupPad) + kGap + kFooterH + kMargin;
 
@@ -116,6 +116,7 @@ namespace
             case kEchoSend:        return "Send";
             case kEchoTime:        return "Time";
             case kEchoFeedback:    return "Feedback";
+            case kBodyTune:        return "Body Tune";
             default:               return "";
         }
     }
@@ -126,7 +127,7 @@ AudreyEditor::AudreyEditor (AudreyProcessor& p) : juce::AudioProcessorEditor (p)
     setLookAndFeel (&laf);
 
     // Row 0: STRING, FILTER, REVERB, LEVELS   Row 1: ENVELOPE, LFO, ECHO
-    groups = { Group { "STRING",   { kPitchOffset, kFeedbackGain, kBody, -1 },          0, {} },
+    groups = { Group { "STRING",   { kPitchOffset, kFeedbackGain, kBody, kBodyTune },   0, {} },
                Group { "FILTER",   { kLpfCutoff, kHpfCutoff, -1, -1 },                  0, {} },
                Group { "REVERB",   { kReverbMix, kReverbDecay, -1, -1 },                0, {} },
                Group { "LEVELS",   { kInputVolume, kOutputVolume, -1, -1 },             0, {} },

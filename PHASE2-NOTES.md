@@ -43,3 +43,19 @@ Parameters are saved with the standard JUCE value-tree XML plus a version tag (`
 * How it sounds and feels in Logic, UI layout on screen (only compiled and syntax-checked, not looked at).
 * auval, long-run CPU, many instances.
 * Behaviour of CC-driven host parameter updates in Logic automation modes.
+
+## Body Tune (18th parameter, `body_tune`, default Off)
+
+Why: the feedback loop locks onto a tooth of the Body comb (multiples of 1/Body), not onto the played note.
+With Body Tune On the Body value is snapped to the nearest whole number of the note's periods (k/f0, within the
+1-100 ms range), so a comb tooth sits on the note. No engine DSP changed; the snap happens in the control layer
+(`Controller::effectiveBody`). Ignored while LFO is On (the LFO drives the delay then). Off = identical to the hardware behaviour.
+
+Measured offline with `tools/tune_sweep.py` (real control layer, 25 notes 16-88, 4 s renders, autocorrelation of 1.5-3.5 s;
+Body 1/5/20 ms, gain -12..+6 dB, HPF 250/10 Hz, with and without a noise burst at the input):
+share of notes whose heard pitch is the played pitch: Off roughly 0-44 %, On roughly 56-84 %.
+By range (gain >= -6 dB): notes 16-36 5 % -> 94 %; 37-57 9 % -> 48 %; 58-70 21 % -> 50 %; 71-88 43 % -> 94 %.
+
+Limits: the autocorrelation metric is a proxy for what you hear, not a listening test. Mid-range notes (37-70) stay around 50 %.
+High notes (about 77-88) still sound roughly 10-25 cents flat; that is the engine's own tuning and is not corrected.
+Not yet heard in Logic.
