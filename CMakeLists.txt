@@ -32,6 +32,10 @@ set_target_properties(audrey_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 add_executable(engine_test EXCLUDE_FROM_ALL test/engine_test.cpp)
 target_link_libraries(engine_test PRIVATE audrey_core)
 
+# Offline pitch measurement tool (renders one note to a raw float file)
+add_executable(pitch_check EXCLUDE_FROM_ALL tools/pitch_check.cpp)
+target_link_libraries(pitch_check PRIVATE audrey_core)
+
 if(AUDREY_BUILD_PLUGIN)
   include(FetchContent)
   FetchContent_Declare(JUCE
