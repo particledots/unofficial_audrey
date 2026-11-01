@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <cmath>
 #include <cstdio>
+#include <vector>
 #include "PluginProcessor.h"
 
 static int failures = 0;
@@ -73,25 +74,41 @@ int main()
         for (int i = 0; i < kNumParams; ++i)
             CHECK (std::abs (raw (c, i) - raw (a, i)) <= 1e-5f * (1.0f + std::abs (raw (a, i))), "%s drifted over a second round trip", paramInfo (i).id);
 
-        // restoring state before prepareToPlay must be what the audio engine starts with
-        AudreyProcessor d;
-        d.setStateInformation (state.getData(), (int) state.getSize());
-        d.setRateAndBufferSizeDetails (48000.0, 512);
-        d.prepareToPlay (48000.0, 512);
-        juce::AudioBuffer<float> buf (2, 512);
-        juce::MidiBuffer midi;
-        midi.addEvent (juce::MidiMessage::noteOn (1, 52, (juce::uint8) 100), 0);
-        double energy = 0.0; bool finite = true;
-        for (int blk = 0; blk < 200; ++blk)
+        // A restored plugin must sound exactly like the one that was saved: same parameters -> same audio, bit for bit.
+        AudreyProcessor e, f;
+        setNormalised (e, kFeedbackGain, (6.0f + 60.0f) / 72.0f);   // +6 dB: the loop sustains, so there is sound to compare
+        setNormalised (e, kOutputVolume, 0.8f);
+        setNormalised (e, kReverbMix, 0.4f);
+        setNormalised (e, kEchoSend, 0.7f);
+        setNormalised (e, kBody, 0.2f);
+        juce::MemoryBlock es; e.getStateInformation (es);
+        f.setStateInformation (es.getData(), (int) es.getSize());   // before prepareToPlay, as a host does when loading a project
+        auto render = [] (AudreyProcessor& pr, double& energy, bool& finite)
         {
-            buf.clear();
-            d.processBlock (buf, midi);
-            midi.clear();
-            for (int ch = 0; ch < 2; ++ch)
-                for (int s = 0; s < 512; ++s) { const float v = buf.getSample (ch, s); if (! std::isfinite (v)) finite = false; energy += (double) v * v; }
-        }
-        CHECK (finite, "non-finite audio after state restore");
-        std::printf ("audio after restore: energy %g\n", energy);
+            pr.setRateAndBufferSizeDetails (48000.0, 512);
+            pr.prepareToPlay (48000.0, 512);
+            juce::AudioBuffer<float> buf (2, 512);
+            juce::MidiBuffer midi;
+            midi.addEvent (juce::MidiMessage::noteOn (1, 52, (juce::uint8) 100), 0);
+            std::vector<float> out;
+            energy = 0.0; finite = true;
+            for (int blk = 0; blk < 200; ++blk)
+            {
+                buf.clear();
+                pr.processBlock (buf, midi);
+                midi.clear();
+                for (int ch = 0; ch < 2; ++ch)
+                    for (int s = 0; s < 512; ++s) { const float v = buf.getSample (ch, s); if (! std::isfinite (v)) finite = false; energy += (double) v * v; out.push_back (v); }
+            }
+            return out;
+        };
+        double eE = 0, eF = 0; bool fin1 = true, fin2 = true;
+        const auto outE = render (e, eE, fin1);
+        const auto outF = render (f, eF, fin2);
+        CHECK (fin1 && fin2, "non-finite audio");
+        CHECK (eE > 1.0e-3, "saved plugin is silent (energy %g): audio check is meaningless", eE);
+        CHECK (outE == outF, "restored plugin does not sound like the saved one (energy %g vs %g)", eE, eF);
+        std::printf ("audio after restore: energy saved %g, restored %g, identical %d\n", eE, eF, (int) (outE == outF));
     }
 
     // 3. MIDI CC moves the host parameter (through the message-thread timer)

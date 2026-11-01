@@ -149,11 +149,11 @@ inline std::string formatValue(int id, float v)
             else if (v >= 100.0f) std::snprintf(b, sizeof b, "%.0f Hz", v);
             else                  std::snprintf(b, sizeof b, "%.1f Hz", v);
             break;
-        case kLfoFrequency:  std::snprintf(b, sizeof b, "%.2f Hz", v); break;
+        case kLfoFrequency:  std::snprintf(b, sizeof b, v < 1.0f ? "%.3f Hz" : "%.2f Hz", v); break;
         case kEchoTime:      std::snprintf(b, sizeof b, "%.2f s", v); break;
         case kLfoOn:
         case kDroneOn:       std::snprintf(b, sizeof b, "%s", v >= 0.5f ? "On" : "Off"); break;
-        default:             std::snprintf(b, sizeof b, "%.2f", v); break;
+        default:             std::snprintf(b, sizeof b, std::fabs(v) < 1.0f ? "%.3f" : "%.2f", v); break;
     }
     return b;
 }
